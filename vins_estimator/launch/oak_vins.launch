@@ -1,0 +1,23 @@
+<launch>
+    <!-- Decompress compressed images to raw for VINS-Fusion -->
+    <node name="republish_left" pkg="image_transport" type="republish" 
+          args="compressed in:=/stereo_depth_imu/left/image_rect raw out:=/cam0/image_raw" />
+    
+    <node name="republish_right" pkg="image_transport" type="republish" 
+          args="compressed in:=/stereo_depth_imu/right/image_rect raw out:=/cam1/image_raw" />
+
+    <!-- VINS-Fusion stereo + IMU estimator -->
+    <node name="vins_estimator" pkg="vins" type="vins_node" 
+          args="$(find vins)/../config/oak_d/oak_stereo_imu_config.yaml"
+          output="screen" />
+
+    <!-- Loop fusion disabled -->
+    <!-- <node name="loop_fusion" pkg="loop_fusion" type="loop_fusion_node" 
+          args="$(find vins)/../config/oak_d/oak_stereo_imu_config.yaml"
+          output="screen" /> -->
+
+    <!-- RViz visualization -->
+    <node name="rviz" pkg="rviz" type="rviz" 
+          args="-d $(find vins)/../config/vins_rviz_config.rviz" 
+          output="log" />
+</launch>

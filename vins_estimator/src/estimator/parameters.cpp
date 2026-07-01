@@ -152,6 +152,10 @@ void readParameters(std::string config_file)
     int pn = config_file.find_last_of('/');
     std::string configPath = config_file.substr(0, pn);
     
+    std::string fisheye_mask_file;
+    fsSettings["fisheye_mask"] >> fisheye_mask_file;
+    FISHEYE_MASK = fisheye_mask_file.empty() ? "" : configPath + "/" + fisheye_mask_file;
+    
     std::string cam0Calib;
     fsSettings["cam0_calib"] >> cam0Calib;
     std::string cam0Path = configPath + "/" + cam0Calib;
@@ -175,8 +179,8 @@ void readParameters(std::string config_file)
     }
 
     INIT_DEPTH = 5.0;
-    BIAS_ACC_THRESHOLD = 0.1;
-    BIAS_GYR_THRESHOLD = 0.1;
+    BIAS_ACC_THRESHOLD = 0.05;
+    BIAS_GYR_THRESHOLD = 0.05;
 
     TD = fsSettings["td"];
     ESTIMATE_TD = fsSettings["estimate_td"];

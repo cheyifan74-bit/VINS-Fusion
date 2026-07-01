@@ -94,6 +94,20 @@ void printStatistics(const Estimator &estimator, double t)
             ROS_DEBUG_STREAM("extirnsic tic: " << estimator.tic[i].transpose());
             ROS_DEBUG_STREAM("extrinsic ric: " << Utility::R2ypr(estimator.ric[i]).transpose());
 
+            printf("\n========== EXTRINSIC cam%d OPTIMIZED ==========\n", i);
+            printf("TIC: %f %f %f\n", estimator.tic[i].x(), estimator.tic[i].y(), estimator.tic[i].z());
+            printf("RIC (ypr deg): %f %f %f\n", 
+                   Utility::R2ypr(estimator.ric[i]).x() * 180/M_PI, 
+                   Utility::R2ypr(estimator.ric[i]).y() * 180/M_PI, 
+                   Utility::R2ypr(estimator.ric[i]).z() * 180/M_PI);
+            printf("body_T_cam%d data (copy to YAML):\n", i);
+            printf("   [%f, %f, %f, %f,\n", 
+                   estimator.ric[i](0,0), estimator.ric[i](0,1), estimator.ric[i](0,2), estimator.tic[i].x());
+            printf("    %f, %f, %f, %f,\n", 
+                   estimator.ric[i](1,0), estimator.ric[i](1,1), estimator.ric[i](1,2), estimator.tic[i].y());
+            printf("    %f, %f, %f, %f]\n", 
+                   estimator.ric[i](2,0), estimator.ric[i](2,1), estimator.ric[i](2,2), estimator.tic[i].z());
+
             Eigen::Matrix4d eigen_T = Eigen::Matrix4d::Identity();
             eigen_T.block<3, 3>(0, 0) = estimator.ric[i];
             eigen_T.block<3, 1>(0, 3) = estimator.tic[i];
@@ -170,8 +184,8 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
               << estimator.Vs[WINDOW_SIZE].z() << "," << endl;
         foutC.close();
         Eigen::Vector3d tmp_T = estimator.Ps[WINDOW_SIZE];
-        printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x(), tmp_T.y(), tmp_T.z(),
-                                                          tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
+        //printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x(), tmp_T.y(), tmp_T.z(),
+        //                                                  tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
     }
 }
 
