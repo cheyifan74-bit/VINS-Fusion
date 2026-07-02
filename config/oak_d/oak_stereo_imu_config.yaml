@@ -26,30 +26,35 @@ body_T_cam0: !!opencv-matrix
    rows: 4
    cols: 4
    dt: d
-   data: [-0.000607, 0.999992, 0.003841, 0.011140,
-           0.999969, 0.000638, -0.007908, -0.035082,
-          -0.007910, 0.003836, -0.999961, 0.030294,
-         0.0,  0.0,  0.0,   1.0]
+   data: [0.0,  1.0,  0.0,  -0.00079,
+          1.0,  0.0,  0.0,  -0.075445,
+          0.0,  0.0, -1.0,  -0.008,
+          0.0,  0.0,  0.0,   1.0]
 
 body_T_cam1: !!opencv-matrix
    rows: 4
    cols: 4
    dt: d
-   data: [-0.000616, 0.999992, 0.003839, 0.009837,
-          0.999896, 0.000671, -0.014380, 0.045511,
-          -0.014382, 0.003830, -0.999889, 0.023541,
-           0.0,       0.0,       0.0,       1.0]
+   data: [0.0,  1.0,  0.0,  -0.00079,
+          1.0,  0.0,  0.0,  -0.000445,
+          0.0,  0.0, -1.0,  -0.008,
+          0.0,  0.0,  0.0,   1.0]
 
 #Multiple thread support
 multiple_thread: 1
 
 #feature traker paprameters
-max_cnt: 100            # max feature number in feature tracking
+max_cnt: 150            # max feature number in feature tracking
 min_dist: 20            # min distance between two features 
 freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
 F_threshold: 1.5        # ransac threshold (pixel)
 show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+
+# ZUPT stationary detection parameters
+zupt_max_disparity: 5.0 
+zupt_max_acc_var: 0.01     # max accelerometer norm variance (Welford)
+zupt_max_gyr_var: 0.001   # max gyroscope norm variance (Welford)
 
 #optimization parameters
 max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time

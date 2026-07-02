@@ -1,8 +1,8 @@
 /*******************************************************
  * Copyright (C) 2019, Aerial Robotics Group, Hong Kong University of Science and Technology
- * 
+ *
  * This file is part of VINS.
- * 
+ *
  * Licensed under the GNU General Public License v3.0;
  * you may not use this file except in compliance with the License.
  *******************************************************/
@@ -23,7 +23,7 @@ using namespace std;
 const double FOCAL_LENGTH = 460.0;
 const int WINDOW_SIZE = 10;
 const int NUM_OF_F = 1000;
-//#define UNIT_SPHERE_ERROR
+// #define UNIT_SPHERE_ERROR
 
 extern double INIT_DEPTH;
 extern double MIN_PARALLAX;
@@ -63,6 +63,11 @@ extern int MIN_DIST;
 extern double F_THRESHOLD;
 extern int SHOW_TRACK;
 extern int FLOW_BACK;
+
+// ZUPT parameters
+extern double ZUPT_MAX_DISPARITY;
+extern double ZUPT_MAX_ACC_VAR;
+extern double ZUPT_MAX_GYR_VAR;
 
 void readParameters(std::string config_file);
 

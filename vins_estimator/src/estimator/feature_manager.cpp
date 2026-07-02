@@ -87,11 +87,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
         }
     }
 
-    // if (frame_count < 2 || last_track_num < 20)
-    // if (frame_count < 2 || last_track_num < 20 || new_feature_num > 0.5 * last_track_num)
-    if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 || new_feature_num > 0.5 * last_track_num)
-        return true;
-
+    // Compute parallax first (always), so last_average_parallax is valid for downstream
     for (auto &it_per_id : feature)
     {
         if (it_per_id.start_frame <= frame_count - 2 &&
@@ -103,16 +99,20 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     }
 
     if (parallax_num == 0)
-    {
-        return true;
-    }
+        last_average_parallax = 999; // mark as unavailable, prevent false stationary
     else
-    {
-        ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
-        ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
         last_average_parallax = parallax_sum / parallax_num * FOCAL_LENGTH;
-        return parallax_sum / parallax_num >= MIN_PARALLAX;
-    }
+
+    // Guard: skip keyframe decision in degenerate cases, always insert
+    if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 || new_feature_num > 0.5 * last_track_num)
+        return true;
+
+    if (parallax_num == 0)
+        return true;
+
+    ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
+    ROS_DEBUG("current parallax: %lf", last_average_parallax);
+    return parallax_sum / parallax_num >= MIN_PARALLAX;
 }
 
 vector<pair<Vector3d, Vector3d>> FeatureManager::getCorresponding(int frame_count_l, int frame_count_r)
@@ -150,11 +150,11 @@ void FeatureManager::setDepth(const VectorXd &x)
         // ROS_INFO("feature id %d , start_frame %d, depth %f ", it_per_id->feature_id, it_per_id-> start_frame, it_per_id->estimated_depth);
         if (it_per_id.estimated_depth <= 0.5 || it_per_id.estimated_depth > 40.0)
         {
-            it_per_id.solve_flag = 2;  // out of valid range
+            it_per_id.solve_flag = 2; // out of valid range
         }
         else if (old_depth > 0.5 && fabs(it_per_id.estimated_depth - old_depth) / old_depth > 0.3)
         {
-            it_per_id.solve_flag = 2;  // depth unstable: >30% change
+            it_per_id.solve_flag = 2; // depth unstable: >30% change
         }
         else
             it_per_id.solve_flag = 1;

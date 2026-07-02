@@ -22,6 +22,7 @@
 
 #include "parameters.h"
 #include "feature_manager.h"
+#include "../utility/zupt_detector.h"
 #include "../utility/utility.h"
 #include "../utility/tic_toc.h"
 #include "../initial/solve_5pts.h"
@@ -142,6 +143,12 @@ class Estimator
     bool first_imu;
     bool is_valid, is_key;
     bool failure_occur;
+    
+    // ZUPT detection
+    bool zupt_stationary;
+    int stationary_count_;
+    ZuptDetector zupt_detector;
+    void checkStationary();
 
     vector<Vector3d> point_cloud;
     vector<Vector3d> margin_cloud;

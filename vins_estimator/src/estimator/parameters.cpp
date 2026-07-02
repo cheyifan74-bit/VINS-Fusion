@@ -1,8 +1,8 @@
 /*******************************************************
  * Copyright (C) 2019, Aerial Robotics Group, Hong Kong University of Science and Technology
- * 
+ *
  * This file is part of VINS.
- * 
+ *
  * Licensed under the GNU General Public License v3.0;
  * you may not use this file except in compliance with the License.
  *******************************************************/
@@ -46,6 +46,10 @@ double F_THRESHOLD;
 int SHOW_TRACK;
 int FLOW_BACK;
 
+// ZUPT parameters
+double ZUPT_MAX_DISPARITY = 5.0;
+double ZUPT_MAX_ACC_VAR = 0.01;
+double ZUPT_MAX_GYR_VAR = 0.001;
 
 template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
@@ -65,16 +69,17 @@ T readParam(ros::NodeHandle &n, std::string name)
 
 void readParameters(std::string config_file)
 {
-    FILE *fh = fopen(config_file.c_str(),"r");
-    if(fh == NULL){
+    FILE *fh = fopen(config_file.c_str(), "r");
+    if (fh == NULL)
+    {
         ROS_WARN("config_file dosen't exist; wrong config_file path");
         ROS_BREAK();
-        return;          
+        return;
     }
     fclose(fh);
 
     cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
-    if(!fsSettings.isOpened())
+    if (!fsSettings.isOpened())
     {
         std::cerr << "ERROR: Wrong path to settings" << std::endl;
     }
@@ -86,12 +91,15 @@ void readParameters(std::string config_file)
     F_THRESHOLD = fsSettings["F_threshold"];
     SHOW_TRACK = fsSettings["show_track"];
     FLOW_BACK = fsSettings["flow_back"];
+    ZUPT_MAX_DISPARITY = fsSettings["zupt_max_disparity"];
+    ZUPT_MAX_ACC_VAR = fsSettings["zupt_max_acc_var"];
+    ZUPT_MAX_GYR_VAR = fsSettings["zupt_max_gyr_var"];
 
     MULTIPLE_THREAD = fsSettings["multiple_thread"];
 
     USE_IMU = fsSettings["imu"];
     printf("USE_IMU: %d\n", USE_IMU);
-    if(USE_IMU)
+    if (USE_IMU)
     {
         fsSettings["imu_topic"] >> IMU_TOPIC;
         printf("IMU_TOPIC: %s\n", IMU_TOPIC.c_str());
@@ -121,9 +129,9 @@ void readParameters(std::string config_file)
         TIC.push_back(Eigen::Vector3d::Zero());
         EX_CALIB_RESULT_PATH = OUTPUT_FOLDER + "/extrinsic_parameter.csv";
     }
-    else 
+    else
     {
-        if ( ESTIMATE_EXTRINSIC == 1)
+        if (ESTIMATE_EXTRINSIC == 1)
         {
             ROS_WARN(" Optimize extrinsic param around initial guess!");
             EX_CALIB_RESULT_PATH = OUTPUT_FOLDER + "/extrinsic_parameter.csv";
@@ -137,39 +145,38 @@ void readParameters(std::string config_file)
         cv::cv2eigen(cv_T, T);
         RIC.push_back(T.block<3, 3>(0, 0));
         TIC.push_back(T.block<3, 1>(0, 3));
-    } 
-    
+    }
+
     NUM_OF_CAM = fsSettings["num_of_cam"];
     printf("camera number %d\n", NUM_OF_CAM);
 
-    if(NUM_OF_CAM != 1 && NUM_OF_CAM != 2)
+    if (NUM_OF_CAM != 1 && NUM_OF_CAM != 2)
     {
         printf("num_of_cam should be 1 or 2\n");
         assert(0);
     }
 
-
     int pn = config_file.find_last_of('/');
     std::string configPath = config_file.substr(0, pn);
-    
+
     std::string fisheye_mask_file;
     fsSettings["fisheye_mask"] >> fisheye_mask_file;
     FISHEYE_MASK = fisheye_mask_file.empty() ? "" : configPath + "/" + fisheye_mask_file;
-    
+
     std::string cam0Calib;
     fsSettings["cam0_calib"] >> cam0Calib;
     std::string cam0Path = configPath + "/" + cam0Calib;
     CAM_NAMES.push_back(cam0Path);
 
-    if(NUM_OF_CAM == 2)
+    if (NUM_OF_CAM == 2)
     {
         STEREO = 1;
         std::string cam1Calib;
         fsSettings["cam1_calib"] >> cam1Calib;
-        std::string cam1Path = configPath + "/" + cam1Calib; 
-        //printf("%s cam1 path\n", cam1Path.c_str() );
+        std::string cam1Path = configPath + "/" + cam1Calib;
+        // printf("%s cam1 path\n", cam1Path.c_str() );
         CAM_NAMES.push_back(cam1Path);
-        
+
         cv::Mat cv_T;
         fsSettings["body_T_cam1"] >> cv_T;
         Eigen::Matrix4d T;
@@ -193,7 +200,7 @@ void readParameters(std::string config_file)
     COL = fsSettings["image_width"];
     ROS_INFO("ROW: %d COL: %d ", ROW, COL);
 
-    if(!USE_IMU)
+    if (!USE_IMU)
     {
         ESTIMATE_EXTRINSIC = 0;
         ESTIMATE_TD = 0;
