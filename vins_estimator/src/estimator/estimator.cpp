@@ -438,6 +438,10 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         // if(solver_flag != NON_LINEAR)
         tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);
 
+        // Set ZUPT flag on pre-integrations
+        pre_integrations[frame_count]->zupt_flag = zupt_stationary;
+        tmp_pre_integration->zupt_flag = zupt_stationary;
+
         dt_buf[frame_count].push_back(dt);
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
@@ -447,14 +451,18 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
             zupt_detector.addImuSample(linear_acceleration, angular_velocity);
         }
 
-        int j = frame_count;
-        Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
-        Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
-        Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();
-        Vector3d un_acc_1 = Rs[j] * (linear_acceleration - Bas[j]) - g;
-        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
-        Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;
-        Vs[j] += dt * un_acc;
+        // Mid-point integration: freeze during stationary to avoid drift
+        if (!zupt_stationary)
+        {
+            int j = frame_count;
+            Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
+            Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
+            Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();
+            Vector3d un_acc_1 = Rs[j] * (linear_acceleration - Bas[j]) - g;
+            Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
+            Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;
+            Vs[j] += dt * un_acc;
+        }
     }
     acc_0 = linear_acceleration;
     gyr_0 = angular_velocity;
@@ -1056,6 +1064,21 @@ bool Estimator::failureDetection()
 void Estimator::optimization()
 {
     checkStationary();
+
+    // ZUPT: stationary → identity state propagation + skip BA
+    if (zupt_stationary)
+    {
+        if (frame_count > 0)
+        {
+            Ps[frame_count] = Ps[frame_count - 1];
+            Rs[frame_count] = Rs[frame_count - 1];
+            Vs[frame_count].setZero();
+            Bas[frame_count] = Bas[frame_count - 1];
+            Bgs[frame_count] = Bgs[frame_count - 1];
+        }
+        return;
+    }
+
     TicToc t_whole, t_prepare;
     vector2double();
 
