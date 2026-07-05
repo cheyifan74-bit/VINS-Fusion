@@ -1,3 +1,11 @@
+/*
+ * @Description:
+ * @Author: che yifan
+ * @Date: 2026-07-05 13:32:31
+ * @LastEditTime: 2026-07-05 13:34:44
+ * @LastEditors: che yifan
+ * @Reference:
+ */
 #pragma once
 
 #include <thread>
@@ -10,16 +18,11 @@ public:
     SlamProcess() = default;
     ~SlamProcess();
 
-    // ---- lifecycle ----
     void init();
     void start();
 
-    // ---- public interfaces ----
     void inputIMU(double t, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr);
     void inputImage(double t, const cv::Mat &img0, const cv::Mat &img1 = cv::Mat());
-    void inputFeature(double t, const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
-    void restart();
-    void changeSensorType(int use_imu, int use_stereo);
 
 private:
     Estimator estimator_;

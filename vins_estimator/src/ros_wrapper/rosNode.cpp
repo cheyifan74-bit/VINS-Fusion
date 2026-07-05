@@ -162,7 +162,6 @@ int main(int argc, char **argv)
 
     readParameters(config_file);
 
-    // SlamProcess manages Estimator + FeatureTracker threads internally
     slam.init();
     slam.start();
 

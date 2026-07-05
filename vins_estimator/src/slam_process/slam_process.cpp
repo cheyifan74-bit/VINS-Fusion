@@ -1,3 +1,11 @@
+/*
+ * @Description:
+ * @Author: che yifan
+ * @Date: 2026-07-05 11:10:14
+ * @LastEditTime: 2026-07-05 13:34:58
+ * @LastEditors: che yifan
+ * @Reference:
+ */
 #include "slam_process.h"
 #include "../estimator/parameters.h"
 
@@ -12,13 +20,10 @@ SlamProcess::~SlamProcess()
 
 void SlamProcess::init()
 {
-    // 1. Estimator
     estimator_.setParameter();
 
-    // 2. FeatureTracker
     tracker_.readIntrinsicParameter(CAM_NAMES);
 
-    // 3. Bind
     tracker_.setEstimator(&estimator_);
     estimator_.setFeatureTracker(&tracker_);
 }
@@ -32,8 +37,6 @@ void SlamProcess::start()
     process_thread_ = std::thread(&Estimator::processMeasurements, &estimator_);
 }
 
-// ---- public interfaces ----
-
 void SlamProcess::inputIMU(double t, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
 {
     estimator_.inputIMU(t, acc, gyr);
@@ -42,20 +45,4 @@ void SlamProcess::inputIMU(double t, const Eigen::Vector3d &acc, const Eigen::Ve
 void SlamProcess::inputImage(double t, const cv::Mat &img0, const cv::Mat &img1)
 {
     tracker_.inputImage(t, img0, img1);
-}
-
-void SlamProcess::inputFeature(double t, const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame)
-{
-    estimator_.inputFeature(t, featureFrame);
-}
-
-void SlamProcess::restart()
-{
-    estimator_.clearState();
-    estimator_.setParameter();
-}
-
-void SlamProcess::changeSensorType(int use_imu, int use_stereo)
-{
-    estimator_.changeSensorType(use_imu, use_stereo);
 }
