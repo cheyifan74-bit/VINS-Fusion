@@ -555,44 +555,44 @@ cv::Mat FeatureTracker::getTrackImage()
 
 void FeatureTracker::stopTracking()
 {
-    stop_tracking_ = true;
+    stop_tracking = true;
 }
 
-void FeatureTracker::setEstimator(Estimator* est)
+void FeatureTracker::setEstimator(Estimator *est)
 {
     estimator_ = est;
 }
 
 void FeatureTracker::processTracking()
 {
-    while (!stop_tracking_)
+    while (!stop_tracking)
     {
         // ---- pop image from buffer ----
         double t;
         cv::Mat img0, img1;
         {
-            unique_lock<mutex> lock(m_buf_);
-            if (image_buf_.empty())
+            unique_lock<mutex> lock(m_buf);
+            if (image_buf.empty())
             {
                 lock.unlock();
                 this_thread::sleep_for(chrono::milliseconds(1));
                 continue;
             }
-            auto tuple = image_buf_.front();
-            image_buf_.pop();
-            t     = get<0>(tuple);
-            img0  = get<1>(tuple);
-            img1  = get<2>(tuple);
+            auto tuple = image_buf.front();
+            image_buf.pop();
+            t = get<0>(tuple);
+            img0 = get<1>(tuple);
+            img1 = get<2>(tuple);
         }
 
         // ---- apply pending outlier removal (from VIO thread) ----
         {
-            unique_lock<mutex> lock(m_outlier_);
-            if (has_pending_outlier_)
+            unique_lock<mutex> lock(m_outlier);
+            if (has_pending_outlier)
             {
-                has_pending_outlier_ = false;
-                set<int> ids_copy = pending_outlier_remove_;
-                pending_outlier_remove_.clear();
+                has_pending_outlier = false;
+                set<int> ids_copy = pending_outlier_remove;
+                pending_outlier_remove.clear();
                 lock.unlock();
                 removeOutliers(ids_copy);
             }
@@ -600,12 +600,12 @@ void FeatureTracker::processTracking()
 
         // ---- apply pending prediction (from VIO thread) ----
         {
-            unique_lock<mutex> lock(m_predict_);
-            if (has_pending_prediction_)
+            unique_lock<mutex> lock(m_predict);
+            if (has_pending_prediction)
             {
-                has_pending_prediction_ = false;
-                map<int, Eigen::Vector3d> pred_copy = pending_predictions_;
-                pending_predictions_.clear();
+                has_pending_prediction = false;
+                map<int, Eigen::Vector3d> pred_copy = pending_predictions;
+                pending_predictions.clear();
                 lock.unlock();
                 setPrediction(pred_copy);
             }
@@ -627,22 +627,22 @@ void FeatureTracker::processTracking()
     }
 }
 
-void FeatureTracker::inputImage(double t, const cv::Mat& img0, const cv::Mat& img1)
+void FeatureTracker::inputImage(double t, const cv::Mat &img0, const cv::Mat &img1)
 {
-    unique_lock<mutex> lock(m_buf_);
-    image_buf_.push(make_tuple(t, img0.clone(), img1.empty() ? img1 : img1.clone()));
+    unique_lock<mutex> lock(m_buf);
+    image_buf.push(make_tuple(t, img0.clone(), img1.empty() ? img1 : img1.clone()));
 }
 
-void FeatureTracker::notifyOutliers(const set<int>& removePtsIds)
+void FeatureTracker::notifyOutliers(const set<int> &removePtsIds)
 {
-    unique_lock<mutex> lock(m_outlier_);
-    pending_outlier_remove_ = removePtsIds;
-    has_pending_outlier_ = true;
+    unique_lock<mutex> lock(m_outlier);
+    pending_outlier_remove = removePtsIds;
+    has_pending_outlier = true;
 }
 
-void FeatureTracker::notifyPrediction(map<int, Eigen::Vector3d>& predictPts)
+void FeatureTracker::notifyPrediction(map<int, Eigen::Vector3d> &predictPts)
 {
-    unique_lock<mutex> lock(m_predict_);
-    pending_predictions_ = predictPts;
-    has_pending_prediction_ = true;
+    unique_lock<mutex> lock(m_predict);
+    pending_predictions = predictPts;
+    has_pending_prediction = true;
 }

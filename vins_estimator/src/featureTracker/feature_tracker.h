@@ -98,16 +98,15 @@ public:
 
     // ---- thread communication ----
     Estimator *estimator_ = nullptr;
-    std::atomic<bool> stop_tracking_{false};
-    std::queue<std::tuple<double, cv::Mat, cv::Mat>> image_buf_;
-    std::mutex m_buf_;
+    std::atomic<bool> stop_tracking{false};
+    std::queue<std::tuple<double, cv::Mat, cv::Mat>> image_buf;
+    std::mutex m_buf;
 
-    // pending cross-thread notifications (applied before trackImage)
-    std::mutex m_outlier_;
-    bool has_pending_outlier_ = false;
-    set<int> pending_outlier_remove_;
+    std::mutex m_outlier;
+    bool has_pending_outlier = false;
+    set<int> pending_outlier_remove;
 
-    std::mutex m_predict_;
-    bool has_pending_prediction_ = false;
-    map<int, Eigen::Vector3d> pending_predictions_;
+    std::mutex m_predict;
+    bool has_pending_prediction = false;
+    map<int, Eigen::Vector3d> pending_predictions;
 };
