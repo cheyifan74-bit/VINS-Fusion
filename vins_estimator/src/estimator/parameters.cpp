@@ -35,7 +35,6 @@ double TD;
 int NUM_OF_CAM;
 int STEREO;
 int USE_IMU;
-int MULTIPLE_THREAD;
 map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
 std::string FISHEYE_MASK;
@@ -94,8 +93,6 @@ void readParameters(std::string config_file)
     ZUPT_MAX_DISPARITY = fsSettings["zupt_max_disparity"];
     ZUPT_MAX_ACC_VAR = fsSettings["zupt_max_acc_var"];
     ZUPT_MAX_GYR_VAR = fsSettings["zupt_max_gyr_var"];
-
-    MULTIPLE_THREAD = fsSettings["multiple_thread"];
 
     USE_IMU = fsSettings["imu"];
     printf("USE_IMU: %d\n", USE_IMU);

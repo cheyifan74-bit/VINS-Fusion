@@ -220,9 +220,6 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
     mBuf.lock();
     featureBuf.push(make_pair(t, featureFrame));
     mBuf.unlock();
-
-    if (!MULTIPLE_THREAD)
-        processMeasurements();
 }
 
 bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector,
@@ -286,8 +283,6 @@ void Estimator::processMeasurements()
                 else
                 {
                     printf("wait for imu ... \n");
-                    if (!MULTIPLE_THREAD)
-                        return;
                     std::chrono::milliseconds dura(5);
                     std::this_thread::sleep_for(dura);
                 }
@@ -333,9 +328,6 @@ void Estimator::processMeasurements()
             pubTF(*this, header);
             mProcess.unlock();
         }
-
-        if (!MULTIPLE_THREAD)
-            break;
 
         std::chrono::milliseconds dura(2);
         std::this_thread::sleep_for(dura);

@@ -127,6 +127,6 @@ private:
     std::mutex m_odom;
 
     // ---- 3D feature points in world frame ----
-    map<int, Vector3d> feature_3d_map;  // feature_id → world position
+    map<int, Vector3d> feature_3d_map; // feature_id → world position
     std::mutex m_feature_3d;
 };
