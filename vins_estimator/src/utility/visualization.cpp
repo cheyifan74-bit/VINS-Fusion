@@ -25,6 +25,7 @@ ros::Publisher pub_keyframe_point;
 ros::Publisher pub_extrinsic;
 
 ros::Publisher pub_image_track;
+ros::Publisher pub_feature_3d;
 
 ros::Publisher pub_debug_state;
 
@@ -48,6 +49,7 @@ void registerPub(ros::NodeHandle &n)
     pub_keyframe_point = n.advertise<sensor_msgs::PointCloud>("keyframe_point", 1000);
     pub_extrinsic = n.advertise<nav_msgs::Odometry>("extrinsic", 1000);
     pub_image_track = n.advertise<sensor_msgs::Image>("image_track", 1000);
+    pub_feature_3d = n.advertise<sensor_msgs::PointCloud>("feature_3d", 1000);
     pub_debug_state = n.advertise<vins::VinsDebugState>("debug_state", 1000);
 
     cameraposevisual.setScale(0.1);
@@ -335,6 +337,40 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
         }
     }
     pub_margin_cloud.publish(margin_cloud);
+}
+
+void pubFeature3D(const Estimator &estimator, const std_msgs::Header &header)
+{
+    sensor_msgs::PointCloud feature_cloud;
+    feature_cloud.header = header;
+
+    // channel[0] = feature_id (int32)
+    sensor_msgs::ChannelFloat32 id_channel;
+    id_channel.name = "feature_id";
+
+    for (auto &it_per_id : estimator.f_manager.feature)
+    {
+        if (it_per_id.estimated_depth <= 0)
+            continue;
+        int used_num = it_per_id.feature_per_frame.size();
+        if (used_num < 2)
+            continue;
+
+        int imu_i = it_per_id.start_frame;
+        Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
+        Vector3d w_pts_i = estimator.Rs[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0])
+                         + estimator.Ps[imu_i];
+
+        geometry_msgs::Point32 p;
+        p.x = w_pts_i(0);
+        p.y = w_pts_i(1);
+        p.z = w_pts_i(2);
+        feature_cloud.points.push_back(p);
+        id_channel.values.push_back(it_per_id.feature_id);
+    }
+
+    feature_cloud.channels.push_back(id_channel);
+    pub_feature_3d.publish(feature_cloud);
 }
 
 void pubTF(const Estimator &estimator, const std_msgs::Header &header)

@@ -37,6 +37,11 @@ void SlamProcess::start()
     process_thread_ = std::thread(&Estimator::processMeasurements, &estimator_);
 }
 
+void SlamProcess::registerSubscribers(ros::NodeHandle &n)
+{
+    tracker_.registerSubscribers(n);
+}
+
 void SlamProcess::inputIMU(double t, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
 {
     estimator_.inputIMU(t, acc, gyr);

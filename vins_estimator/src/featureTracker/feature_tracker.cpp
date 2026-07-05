@@ -547,10 +547,6 @@ cv::Mat FeatureTracker::getTrackImage()
     return imTrack;
 }
 
-// ================================================================
-//  Thread-safe interfaces for SlamProcess / Estimator
-// ================================================================
-
 void FeatureTracker::stopTracking()
 {
     stop_tracking = true;
@@ -583,31 +579,7 @@ void FeatureTracker::processTracking()
             img1 = get<2>(tuple);
         }
 
-        // ---- apply pending outlier removal (from VIO thread) ----
-        {
-            unique_lock<mutex> lock(m_outlier);
-            if (has_pending_outlier)
-            {
-                has_pending_outlier = false;
-                set<int> ids_copy = pending_outlier_remove;
-                pending_outlier_remove.clear();
-                lock.unlock();
-                removeOutliers(ids_copy);
-            }
-        }
-
-        // ---- apply pending prediction (from VIO thread) ----
-        {
-            unique_lock<mutex> lock(m_predict);
-            if (has_pending_prediction)
-            {
-                has_pending_prediction = false;
-                map<int, Eigen::Vector3d> pred_copy = pending_predictions;
-                pending_predictions.clear();
-                lock.unlock();
-                setPrediction(pred_copy);
-            }
-        }
+        computePrediction(t);
 
         // track
         TicToc t_track;
@@ -631,16 +603,134 @@ void FeatureTracker::inputImage(double t, const cv::Mat &img0, const cv::Mat &im
     image_buf.push(make_tuple(t, img0.clone(), img1.empty() ? img1 : img1.clone()));
 }
 
-void FeatureTracker::notifyOutliers(const set<int> &removePtsIds)
+void FeatureTracker::registerSubscribers(ros::NodeHandle &n)
 {
-    unique_lock<mutex> lock(m_outlier);
-    pending_outlier_remove = removePtsIds;
-    has_pending_outlier = true;
+    sub_imu_odom = n.subscribe<nav_msgs::Odometry>(
+        "imu_propagate", 1000, &FeatureTracker::imuOdomCallback, this);
+    sub_feature_3d = n.subscribe<sensor_msgs::PointCloud>(
+        "feature_3d", 100, &FeatureTracker::feature3DCallback, this);
 }
 
-void FeatureTracker::notifyPrediction(map<int, Eigen::Vector3d> &predictPts)
+void FeatureTracker::imuOdomCallback(const nav_msgs::OdometryConstPtr &msg)
 {
-    unique_lock<mutex> lock(m_predict);
-    pending_predictions = predictPts;
-    has_pending_prediction = true;
+    OdometryFrame frame;
+    frame.t = msg->header.stamp.toSec();
+    frame.P = Vector3d(msg->pose.pose.position.x,
+                       msg->pose.pose.position.y,
+                       msg->pose.pose.position.z);
+    frame.Q = Quaterniond(msg->pose.pose.orientation.w,
+                          msg->pose.pose.orientation.x,
+                          msg->pose.pose.orientation.y,
+                          msg->pose.pose.orientation.z);
+
+    unique_lock<mutex> lock(m_odom);
+    odom_buf.push_back(frame);
+    while (!odom_buf.empty() && odom_buf.front().t < frame.t - 5.0)
+        odom_buf.pop_front();
+}
+
+void FeatureTracker::feature3DCallback(const sensor_msgs::PointCloudConstPtr &msg)
+{
+    unique_lock<mutex> lock(m_feature_3d);
+    feature_3d_map.clear();
+
+    if (msg->channels.empty())
+        return;
+    const auto &id_channel = msg->channels[0];
+    for (size_t i = 0; i < msg->points.size() && i < id_channel.values.size(); i++)
+    {
+        int feature_id = static_cast<int>(id_channel.values[i]);
+        Vector3d w_pt(msg->points[i].x, msg->points[i].y, msg->points[i].z);
+        feature_3d_map[feature_id] = w_pt;
+    }
+}
+
+void FeatureTracker::computePrediction(double img_time)
+{
+    // Snap-shot under locks: copy odometry buffer + 3D map
+    deque<OdometryFrame> odom_snap;
+    map<int, Vector3d> f3d_snap;
+    {
+        unique_lock<mutex> lock(m_odom);
+        odom_snap = odom_buf;
+    }
+    {
+        unique_lock<mutex> lock(m_feature_3d);
+        f3d_snap = feature_3d_map;
+    }
+
+    if (odom_snap.empty() || f3d_snap.empty())
+    {
+        hasPrediction = false;
+        return;
+    }
+
+    // ---- interpolate IMU pose at image time ----
+    Vector3d P_img;
+    Quaterniond Q_img;
+
+    if (img_time <= odom_snap.front().t)
+    {
+        // image is older than oldest buffered odom — use oldest
+        P_img = odom_snap.front().P;
+        Q_img = odom_snap.front().Q;
+    }
+    else if (img_time >= odom_snap.back().t)
+    {
+        // image is newer than newest odom — use newest
+        P_img = odom_snap.back().P;
+        Q_img = odom_snap.back().Q;
+    }
+    else
+    {
+        size_t i = 0;
+        while (i + 1 < odom_snap.size() && odom_snap[i + 1].t < img_time)
+            i++;
+
+        double t_i = odom_snap[i].t;
+        double t_j = odom_snap[i + 1].t;
+        double ratio = (img_time - t_i) / (t_j - t_i);
+
+        // linear interpolation for position
+        P_img = odom_snap[i].P * (1.0 - ratio) + odom_snap[i + 1].P * ratio;
+
+        // slerp for orientation
+        Q_img = odom_snap[i].Q.slerp(ratio, odom_snap[i + 1].Q);
+    }
+
+    // ---- IMU world pose → camera pose (apply extrinsic T_ic) ----
+    Quaterniond qic(RIC[0]);
+    Vector3d tic = TIC[0];
+
+    Quaterniond Q_wc = Q_img * qic;
+    Vector3d P_wc = P_img + Q_img * tic;
+
+    Eigen::Matrix3d R_wc = Q_wc.toRotationMatrix();
+
+    // ---- project 3D world points → camera → pixel ----
+    predict_pts.clear();
+    predict_pts_debug.clear();
+    hasPrediction = true;
+
+    for (size_t idx = 0; idx < ids.size(); idx++)
+    {
+        int id = ids[idx];
+        auto it = f3d_snap.find(id);
+        if (it != f3d_snap.end())
+        {
+            // world → camera coordinates
+            Vector3d pts_cam = R_wc.transpose() * (it->second - P_wc);
+
+            // camera 3D → pixel using camera model
+            Eigen::Vector2d tmp_uv;
+            m_camera[0]->spaceToPlane(pts_cam, tmp_uv);
+            predict_pts.push_back(cv::Point2f(tmp_uv.x(), tmp_uv.y()));
+            predict_pts_debug.push_back(cv::Point2f(tmp_uv.x(), tmp_uv.y()));
+        }
+        else
+        {
+            // no 3D info — fall back to previous position
+            predict_pts.push_back(prev_pts[idx]);
+        }
+    }
 }

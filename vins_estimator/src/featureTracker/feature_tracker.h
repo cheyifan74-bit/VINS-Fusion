@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <iostream>
 #include <queue>
+#include <deque>
 #include <mutex>
 #include <thread>
 #include <atomic>
@@ -22,6 +23,10 @@
 #include <csignal>
 #include <opencv2/opencv.hpp>
 #include <eigen3/Eigen/Dense>
+
+#include <ros/ros.h>
+#include <nav_msgs/Odometry.h>
+#include <sensor_msgs/PointCloud.h>
 
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
@@ -65,13 +70,12 @@ public:
     cv::Mat getTrackImage();
     bool inBorder(const cv::Point2f &pt);
 
-    // ---- thread-safe interfaces for SlamProcess / Estimator ----
+    // ---- lifecycle & configuration ----
     void stopTracking();
     void setEstimator(Estimator *est);
+    void registerSubscribers(ros::NodeHandle &n);
     void processTracking();
     void inputImage(double t, const cv::Mat &img0, const cv::Mat &img1);
-    void notifyOutliers(const set<int> &removePtsIds);
-    void notifyPrediction(map<int, Eigen::Vector3d> &predictPts);
 
     int row, col;
     cv::Mat imTrack;
@@ -96,17 +100,33 @@ public:
     int n_id;
     bool hasPrediction;
 
+private:
+    // ---- compute prediction from buffered IMU poses + 3D points ----
+    void imuOdomCallback(const nav_msgs::OdometryConstPtr &msg);
+    void feature3DCallback(const sensor_msgs::PointCloudConstPtr &msg);
+    void computePrediction(double img_time);
+
     // ---- thread communication ----
     Estimator *estimator_ = nullptr;
     std::atomic<bool> stop_tracking{false};
     std::queue<std::tuple<double, cv::Mat, cv::Mat>> image_buf;
     std::mutex m_buf;
 
-    std::mutex m_outlier;
-    bool has_pending_outlier = false;
-    set<int> pending_outlier_remove;
+    // ---- ROS subscribers ----
+    ros::Subscriber sub_imu_odom;
+    ros::Subscriber sub_feature_3d;
 
-    std::mutex m_predict;
-    bool has_pending_prediction = false;
-    map<int, Eigen::Vector3d> pending_predictions;
+    // ---- IMU propagation pose buffer (for interpolation) ----
+    struct OdometryFrame
+    {
+        double t;
+        Vector3d P;
+        Quaterniond Q;
+    };
+    std::deque<OdometryFrame> odom_buf;
+    std::mutex m_odom;
+
+    // ---- 3D feature points in world frame ----
+    map<int, Vector3d> feature_3d_map;  // feature_id → world position
+    std::mutex m_feature_3d;
 };

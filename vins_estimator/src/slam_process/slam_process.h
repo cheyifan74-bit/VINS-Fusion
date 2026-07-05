@@ -20,6 +20,7 @@ public:
 
     void init();
     void start();
+    void registerSubscribers(ros::NodeHandle &n);
 
     void inputIMU(double t, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr);
     void inputImage(double t, const cv::Mat &img0, const cv::Mat &img1 = cv::Mat());
