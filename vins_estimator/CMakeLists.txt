@@ -67,6 +67,6 @@ add_library(vins_lib
 target_link_libraries(vins_lib ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
 
-add_executable(vins_node src/rosNodeTest.cpp)
+add_executable(vins_node src/ros_wrapper/rosNode.cpp)
 target_link_libraries(vins_node vins_lib)
 
