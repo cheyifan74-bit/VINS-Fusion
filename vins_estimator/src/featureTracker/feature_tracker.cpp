@@ -10,6 +10,8 @@
  *******************************************************/
 
 #include "feature_tracker.h"
+#include "../estimator/estimator.h"
+#include "../utility/visualization.h"
 
 bool FeatureTracker::inBorder(const cv::Point2f &pt)
 {
@@ -545,4 +547,102 @@ void FeatureTracker::removeOutliers(set<int> &removePtsIds)
 cv::Mat FeatureTracker::getTrackImage()
 {
     return imTrack;
+}
+
+// ================================================================
+//  Thread-safe interfaces for SlamProcess / Estimator
+// ================================================================
+
+void FeatureTracker::stopTracking()
+{
+    stop_tracking_ = true;
+}
+
+void FeatureTracker::setEstimator(Estimator* est)
+{
+    estimator_ = est;
+}
+
+void FeatureTracker::processTracking()
+{
+    while (!stop_tracking_)
+    {
+        // ---- pop image from buffer ----
+        double t;
+        cv::Mat img0, img1;
+        {
+            unique_lock<mutex> lock(m_buf_);
+            if (image_buf_.empty())
+            {
+                lock.unlock();
+                this_thread::sleep_for(chrono::milliseconds(1));
+                continue;
+            }
+            auto tuple = image_buf_.front();
+            image_buf_.pop();
+            t     = get<0>(tuple);
+            img0  = get<1>(tuple);
+            img1  = get<2>(tuple);
+        }
+
+        // ---- apply pending outlier removal (from VIO thread) ----
+        {
+            unique_lock<mutex> lock(m_outlier_);
+            if (has_pending_outlier_)
+            {
+                has_pending_outlier_ = false;
+                set<int> ids_copy = pending_outlier_remove_;
+                pending_outlier_remove_.clear();
+                lock.unlock();
+                removeOutliers(ids_copy);
+            }
+        }
+
+        // ---- apply pending prediction (from VIO thread) ----
+        {
+            unique_lock<mutex> lock(m_predict_);
+            if (has_pending_prediction_)
+            {
+                has_pending_prediction_ = false;
+                map<int, Eigen::Vector3d> pred_copy = pending_predictions_;
+                pending_predictions_.clear();
+                lock.unlock();
+                setPrediction(pred_copy);
+            }
+        }
+
+        // track
+        TicToc t_track;
+        auto featureFrame = trackImage(t, img0, img1);
+
+        // publish track image
+        if (SHOW_TRACK)
+            pubTrackImage(imTrack, t);
+
+        // push to estimator
+        if (estimator_ && !featureFrame.empty())
+            estimator_->inputFeature(t, featureFrame);
+
+        ROS_DEBUG("whole feature tracker costs: %fms", t_track.toc());
+    }
+}
+
+void FeatureTracker::inputImage(double t, const cv::Mat& img0, const cv::Mat& img1)
+{
+    unique_lock<mutex> lock(m_buf_);
+    image_buf_.push(make_tuple(t, img0.clone(), img1.empty() ? img1 : img1.clone()));
+}
+
+void FeatureTracker::notifyOutliers(const set<int>& removePtsIds)
+{
+    unique_lock<mutex> lock(m_outlier_);
+    pending_outlier_remove_ = removePtsIds;
+    has_pending_outlier_ = true;
+}
+
+void FeatureTracker::notifyPrediction(map<int, Eigen::Vector3d>& predictPts)
+{
+    unique_lock<mutex> lock(m_predict_);
+    pending_predictions_ = predictPts;
+    has_pending_prediction_ = true;
 }

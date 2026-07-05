@@ -17,11 +17,11 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
-#include "../estimator/estimator.h"
+#include "../slam_process/slam_process.h"
 #include "../estimator/parameters.h"
 #include "../utility/visualization.h"
 
-Estimator estimator;
+SlamProcess slam;
 
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
@@ -99,12 +99,11 @@ void sync_process()
                     img0_buf.pop();
                     image1 = getImageFromMsg(img1_buf.front());
                     img1_buf.pop();
-                    // printf("find img0 and img1\n");
                 }
             }
             m_buf.unlock();
             if (!image0.empty())
-                estimator.inputImage(time, image0, image1);
+                slam.inputImage(time, image0, image1);
         }
         else
         {
@@ -121,7 +120,7 @@ void sync_process()
             }
             m_buf.unlock();
             if (!image.empty())
-                estimator.inputImage(time, image);
+                slam.inputImage(time, image);
         }
 
         std::chrono::milliseconds dura(2);
@@ -140,7 +139,7 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     double rz = imu_msg->angular_velocity.z;
     Vector3d acc(dx, dy, dz);
     Vector3d gyr(rx, ry, rz);
-    estimator.inputIMU(t, acc, gyr);
+    slam.inputIMU(t, acc, gyr);
     return;
 }
 
@@ -164,7 +163,6 @@ void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
             double gy = feature_msg->channels[7].values[i];
             double gz = feature_msg->channels[8].values[i];
             pts_gt[feature_id] = Eigen::Vector3d(gx, gy, gz);
-            // printf("receive pts gt %d %f %f %f\n", feature_id, gx, gy, gz);
         }
         ROS_ASSERT(z == 1);
         Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
@@ -172,7 +170,7 @@ void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
         featureFrame[feature_id].emplace_back(camera_id, xyz_uv_velocity);
     }
     double t = feature_msg->header.stamp.toSec();
-    estimator.inputFeature(t, featureFrame);
+    slam.inputFeature(t, featureFrame);
     return;
 }
 
@@ -181,8 +179,7 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     if (restart_msg->data == true)
     {
         ROS_WARN("restart the estimator!");
-        estimator.clearState();
-        estimator.setParameter();
+        slam.restart();
     }
     return;
 }
@@ -191,13 +188,11 @@ void imu_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 {
     if (switch_msg->data == true)
     {
-        // ROS_WARN("use IMU!");
-        estimator.changeSensorType(1, STEREO);
+        slam.changeSensorType(1, STEREO);
     }
     else
     {
-        // ROS_WARN("disable IMU!");
-        estimator.changeSensorType(0, STEREO);
+        slam.changeSensorType(0, STEREO);
     }
     return;
 }
@@ -206,13 +201,11 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 {
     if (switch_msg->data == true)
     {
-        // ROS_WARN("use stereo!");
-        estimator.changeSensorType(USE_IMU, 1);
+        slam.changeSensorType(USE_IMU, 1);
     }
     else
     {
-        // ROS_WARN("use mono camera (left)!");
-        estimator.changeSensorType(USE_IMU, 0);
+        slam.changeSensorType(USE_IMU, 0);
     }
     return;
 }
@@ -235,7 +228,10 @@ int main(int argc, char **argv)
     printf("config_file: %s\n", argv[1]);
 
     readParameters(config_file);
-    estimator.setParameter();
+
+    // SlamProcess manages Estimator + FeatureTracker threads internally
+    slam.init();
+    slam.start();
 
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");

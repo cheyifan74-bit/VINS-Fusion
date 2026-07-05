@@ -8,22 +8,17 @@
  *******************************************************/
 
 #include "estimator.h"
+#include "../featureTracker/feature_tracker.h"
 #include "../utility/visualization.h"
 
 Estimator::Estimator() : f_manager{Rs}
 {
     ROS_INFO("init begins");
-    initThreadFlag = false;
     clearState();
 }
 
 Estimator::~Estimator()
 {
-    if (MULTIPLE_THREAD)
-    {
-        processThread.join();
-        printf("join thread \n");
-    }
 }
 
 void Estimator::clearState()
@@ -41,7 +36,6 @@ void Estimator::clearState()
     openExEstimation = 0;
     initP = Eigen::Vector3d(0, 0, 0);
     initR = Eigen::Matrix3d::Identity();
-    inputImageCnt = 0;
     initFirstPoseFlag = false;
 
     for (int i = 0; i < WINDOW_SIZE + 1; i++)
@@ -156,16 +150,8 @@ void Estimator::setParameter()
     td = TD;
     g = G;
     cout << "set g " << g.transpose() << endl;
-    featureTracker.readIntrinsicParameter(CAM_NAMES);
-
     zupt_detector.configure(ZUPT_MAX_ACC_VAR, ZUPT_MAX_GYR_VAR);
 
-    std::cout << "MULTIPLE_THREAD is " << MULTIPLE_THREAD << '\n';
-    if (MULTIPLE_THREAD && !initThreadFlag)
-    {
-        initThreadFlag = true;
-        processThread = std::thread(&Estimator::processMeasurements, this);
-    }
     mProcess.unlock();
 }
 
@@ -207,42 +193,9 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
     }
 }
 
-void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
+void Estimator::setFeatureTracker(FeatureTracker *ft)
 {
-    inputImageCnt++;
-    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
-    TicToc featureTrackerTime;
-
-    if (_img1.empty())
-        featureFrame = featureTracker.trackImage(t, _img);
-    else
-        featureFrame = featureTracker.trackImage(t, _img, _img1);
-    // printf("featureTracker time: %f\n", featureTrackerTime.toc());
-
-    if (SHOW_TRACK)
-    {
-        cv::Mat imgTrack = featureTracker.getTrackImage();
-        pubTrackImage(imgTrack, t);
-    }
-
-    if (MULTIPLE_THREAD)
-    {
-        if (inputImageCnt % 2 == 0)
-        {
-            mBuf.lock();
-            featureBuf.push(make_pair(t, featureFrame));
-            mBuf.unlock();
-        }
-    }
-    else
-    {
-        mBuf.lock();
-        featureBuf.push(make_pair(t, featureFrame));
-        mBuf.unlock();
-        TicToc processTime;
-        processMeasurements();
-        printf("process time: %f\n", processTime.toc());
-    }
+    feature_tracker_ = ft;
 }
 
 void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity)
@@ -604,9 +557,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         set<int> removeIndex;
         outliersRejection(removeIndex);
         f_manager.removeOutlier(removeIndex);
-        if (!MULTIPLE_THREAD)
+        if (feature_tracker_)
         {
-            featureTracker.removeOutliers(removeIndex);
+            feature_tracker_->notifyOutliers(removeIndex);
             predictPtsInNextFrame();
         }
 
@@ -1563,7 +1516,8 @@ void Estimator::predictPtsInNextFrame()
             }
         }
     }
-    featureTracker.setPrediction(predictPts);
+    if (feature_tracker_)
+        feature_tracker_->notifyPrediction(predictPts);
     // printf("estimator output %d predict pts\n",(int)predictPts.size());
 }
 

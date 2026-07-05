@@ -35,8 +35,8 @@
 #include "../factor/projectionTwoFrameOneCamFactor.h"
 #include "../factor/projectionTwoFrameTwoCamFactor.h"
 #include "../factor/projectionOneFrameTwoCamFactor.h"
-#include "../featureTracker/feature_tracker.h"
 
+class FeatureTracker;
 
 class Estimator
 {
@@ -45,11 +45,13 @@ class Estimator
     ~Estimator();
     void setParameter();
 
+    // FeatureTracker binding (for outlier/prediction cross-thread notification)
+    void setFeatureTracker(FeatureTracker *ft);
+
     // interface
     void initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r);
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
-    void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
     void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header);
     void processMeasurements();
@@ -102,10 +104,7 @@ class Estimator
     double prevTime, curTime;
     bool openExEstimation;
 
-    std::thread trackThread;
-    std::thread processThread;
-
-    FeatureTracker featureTracker;
+    FeatureTracker *feature_tracker_ = nullptr;
 
     SolverFlag solver_flag;
     MarginalizationFlag  marginalization_flag;
@@ -134,7 +133,6 @@ class Estimator
 
     int frame_count;
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
-    int inputImageCnt;
 
     FeatureManager f_manager;
     MotionEstimator m_estimator;
@@ -180,5 +178,4 @@ class Estimator
     Eigen::Quaterniond latest_Q;
 
     bool initFirstPoseFlag;
-    bool initThreadFlag;
 };
