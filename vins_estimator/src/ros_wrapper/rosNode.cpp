@@ -166,10 +166,6 @@ int main(int argc, char **argv)
     slam.init();
     slam.start();
 
-#ifdef EIGEN_DONT_PARALLELIZE
-    ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
-#endif
-
     ROS_WARN("waiting for image and imu...");
 
     registerPub(n);
